@@ -19,8 +19,12 @@ namespace revit_mcp_plugin.Core
             McpLogger.Initialize(pluginDir);
             McpLogger.Info("Application", "Plugin starting");
 
-            // Auto-configure Claude Desktop on first run (silent, never crashes)
-            ClaudeDesktopConfigurator.EnsureConfigured();
+            // [experiment P1] Removed: ClaudeDesktopConfigurator.EnsureConfigured() silently edited
+            // Claude Desktop's config on every Revit start.
+
+            // [experiment P3] Start the MCP listener automatically on the first Idling event
+            // (a valid API context with a UIApplication), instead of waiting for a ribbon click.
+            application.Idling += AutoStartOnIdling;
 
             // Register Dockable Panel
             try
@@ -59,6 +63,27 @@ namespace revit_mcp_plugin.Core
             mcpPanel.AddItem(mcp_settings_pushButtonData);
 
             return Result.Succeeded;
+        }
+
+        private void AutoStartOnIdling(object sender, Autodesk.Revit.UI.Events.IdlingEventArgs e)
+        {
+            var uiApp = sender as UIApplication;
+            if (uiApp == null) return;
+            uiApp.Idling -= AutoStartOnIdling;
+            try
+            {
+                var service = SocketService.Instance;
+                if (!service.IsRunning)
+                {
+                    service.Initialize(uiApp);
+                    service.Start();
+                    McpLogger.Info("Application", $"Auto-started MCP listener, running={service.IsRunning}, port={service.Port}");
+                }
+            }
+            catch (Exception ex)
+            {
+                McpLogger.Error("Application", "Auto-start of MCP listener failed", ex);
+            }
         }
 
         public Result OnShutdown(UIControlledApplication application)

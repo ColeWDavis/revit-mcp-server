@@ -12,14 +12,11 @@ namespace RevitMCPCommandSet.Helpers
         {
             if (elementCount <= 0) return true;
 
-            var dialog = new TaskDialog("MCP Operation Confirmation")
-            {
-                MainContent = $"About to {action} {elementCount} element(s). Continue?",
-                CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No,
-                DefaultButton = TaskDialogResult.No
-            };
-
-            return dialog.Show() == TaskDialogResult.Yes;
+            // [experiment P2] Unattended runs: no human can answer a modal dialog, so auto-confirm
+            // and log instead of blocking Revit's main thread.
+            System.Diagnostics.Trace.WriteLine(
+                $"[RevitMCP][dialog_suppressed] Auto-confirmed: {action} {elementCount} element(s)");
+            return true;
         }
     }
 }

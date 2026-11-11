@@ -47,9 +47,10 @@
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.CSharp" Version="4.7.0"/>
-        <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).*"/>
-        <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*"/>
-        <PackageReference Include="RevitMCPSDK" Version="$(RevitVersion).*"/>
+        <!-- [experiment P5] exact pins (fork builds Revit 2027 only); SDK built from audited source -->
+        <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2027.3.0"/>
+        <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2027.3.0"/>
+        <ProjectReference Include="..\..\RevitMCPSDK\RevitMCPSDK\RevitMCPSDK.csproj"/>
     </ItemGroup>
     <ItemGroup>
         <Resource Include="Core\Ressources\icon-16.png"/>

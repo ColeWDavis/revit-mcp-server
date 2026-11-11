@@ -286,6 +286,15 @@ namespace revit_mcp_plugin.Core
                         if (string.IsNullOrEmpty(message))
                             continue;
 
+                        // [experiment P4] Refuse HTTP traffic (e.g. a web page POSTing to 127.0.0.1),
+                        // which would otherwise have its JSON body line executed as a command.
+                        if (System.Text.RegularExpressions.Regex.IsMatch(message,
+                                @"^(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|CONNECT|TRACE) \S+ HTTP/"))
+                        {
+                            McpLogger.Warn("SocketService", "Rejected HTTP request on MCP socket; closing connection");
+                            return;
+                        }
+
                         System.Diagnostics.Trace.WriteLine($"Received message: {message}");
                         string response = ProcessJsonRPCRequest(message);
 
