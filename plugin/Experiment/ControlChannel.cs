@@ -19,6 +19,7 @@ namespace revit_mcp_plugin.Experiment
     public static class ControlChannel
     {
         private static TcpListener _listener;
+        private static string _lastTemplate;
         public static int Port { get; private set; } = 8765;
 
         public static void Start()
@@ -124,6 +125,7 @@ namespace revit_mcp_plugin.Experiment
                 return uidoc.Document.Title;
             }, 180000);
 
+            _lastTemplate = template;
             RunLog.Begin(runDir);
             RunLog.Write("begin_run", new JObject { ["template"] = template, ["model"] = model, ["doc"] = title, ["revit_build"] = ExperimentHooks.RevitBuild });
             return new JObject { ["ok"] = true, ["doc"] = title, ["model"] = model };
@@ -144,6 +146,30 @@ namespace revit_mcp_plugin.Experiment
             }, 600000);
             RunLog.Write("end_run", res);
             RunLog.End();
+
+            // Park Revit on a blank copy of the template and close the run's model, so the harness can
+            // move the run's files away (the active document cannot be closed via the API).
+            try
+            {
+                string idleDir = Path.Combine(Path.GetDirectoryName(runDir) ?? runDir, "_idle");
+                Directory.CreateDirectory(idleDir);
+                string idle = Path.Combine(idleDir, "idle.rvt");
+                if (!File.Exists(idle) && _lastTemplate != null) File.Copy(_lastTemplate, idle);
+                if (File.Exists(idle))
+                {
+                    res["parked"] = (bool)ApiRunner.Run(app =>
+                    {
+                        var uidoc = app.OpenAndActivateDocument(idle);
+                        var keep = uidoc.Document.PathName;
+                        foreach (var d in app.Application.Documents.Cast<Document>()
+                                     .Where(d => !d.IsLinked && !string.Equals(d.PathName, keep, StringComparison.OrdinalIgnoreCase)).ToList())
+                        { try { d.Close(false); } catch { } }
+                        return true;
+                    }, 180000);
+                }
+            }
+            catch (Exception ex) { res["parked"] = false; res["park_error"] = ex.Message; }
+
             res["ok"] = true;
             return res;
         }
