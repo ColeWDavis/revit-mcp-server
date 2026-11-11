@@ -26,6 +26,10 @@ namespace revit_mcp_plugin.Core
             // (a valid API context with a UIApplication), instead of waiting for a ribbon click.
             application.Idling += AutoStartOnIdling;
 
+            // [experiment C2] event logger, snapshots and harness control channel
+            try { revit_mcp_plugin.Experiment.ExperimentHooks.Init(application); }
+            catch (Exception ex) { McpLogger.Error("Application", "Experiment hooks failed to initialise", ex); }
+
             // Register Dockable Panel
             try
             {

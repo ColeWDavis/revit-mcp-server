@@ -346,11 +346,14 @@ namespace revit_mcp_plugin.Core
                 }
 
                 // Execute command.
+                var paramsObj = request.GetParamsObject();
+                var expRec = Experiment.ExperimentHooks.BeforeCommand(request.Method, request.Id, paramsObj); // [experiment C2]
                 try
                 {
                     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                    object result = command.Execute(request.GetParamsObject(), request.Id);
+                    object result = command.Execute(paramsObj, request.Id);
                     stopwatch.Stop();
+                    Experiment.ExperimentHooks.AfterCommand(expRec, true, null, result); // [experiment C2]
 
                     // Log to dockable panel
                     try
@@ -365,6 +368,7 @@ namespace revit_mcp_plugin.Core
                 catch (Exception ex)
                 {
                     McpLogger.Error("SocketService", $"Command '{request.Method}' failed", ex);
+                    Experiment.ExperimentHooks.AfterCommand(expRec, false, ex.Message, null); // [experiment C2]
 
                     // Log error to dockable panel
                     try

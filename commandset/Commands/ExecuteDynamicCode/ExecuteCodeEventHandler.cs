@@ -77,7 +77,9 @@ namespace RevitMCPCommandSet.Commands.ExecuteDynamicCode
                             parameters: _executionParameters
                         );
 
-                        transaction.Commit();
+                        var commitStatus = transaction.Commit();
+                        // [experiment C2] record the real outcome; the tool result is unchanged
+                        System.Diagnostics.Trace.WriteLine($"[RevitMCP][csharp_commit] {commitStatus}");
 
                         ResultInfo.Success = true;
                         ResultInfo.Result = JsonConvert.SerializeObject(result);
@@ -86,6 +88,9 @@ namespace RevitMCPCommandSet.Commands.ExecuteDynamicCode
             }
             catch (Exception ex)
             {
+                // [experiment C2] record the inner exception the agent does not see; the tool result is unchanged
+                var inner = (ex is TargetInvocationException tie && tie.InnerException != null) ? tie.InnerException : ex;
+                System.Diagnostics.Trace.WriteLine("[RevitMCP][csharp_exception] " + inner.ToString().Replace("\r", " ").Replace("\n", " | "));
                 ResultInfo.Success = false;
                 ResultInfo.ErrorMessage = $"Execution failed: {ex.Message}";
             }

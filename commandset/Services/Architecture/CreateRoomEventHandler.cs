@@ -29,6 +29,8 @@ namespace RevitMCPCommandSet.Services.Architecture
                     description.Contains("duplicate") ||
                     description.Contains("Duplicate"))
                 {
+                    // [experiment C2] record what is suppressed (no behaviour change)
+                    System.Diagnostics.Trace.WriteLine($"[RevitMCP][warning_deleted] {failure.GetSeverity()}: {description}");
                     failuresAccessor.DeleteWarning(failure);
                 }
             }
