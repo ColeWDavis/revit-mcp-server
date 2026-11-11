@@ -106,6 +106,22 @@ namespace revit_mcp_plugin.Experiment
                 string txn = null; bool? committing = null;
                 try { txn = fa.GetTransactionName(); } catch { }
                 try { committing = fa.IsTransactionBeingCommitted(); } catch { }
+                // Decision 2026-11-10 (see DialogBoxShowing): when only warnings are pending, ask Revit to
+                // show them non-modally (like a person clicking OK: the change commits, warnings stay in the
+                // model) instead of a modal dialog that blocks the main thread.
+                bool warningsOnly = msgs.All(m => m.GetSeverity() == FailureSeverity.Warning);
+                string handling = "revit_default";
+                if (warningsOnly)
+                {
+                    try
+                    {
+                        var opts = fa.GetFailureHandlingOptions();
+                        opts.SetForcedModalHandling(false);
+                        fa.SetFailureHandlingOptions(opts);
+                        handling = "non_modal_warnings";
+                    }
+                    catch (Exception ex) { handling = "non_modal_failed: " + ex.Message; }
+                }
                 foreach (var m in msgs)
                 {
                     var sev = m.GetSeverity();
@@ -119,9 +135,9 @@ namespace revit_mcp_plugin.Experiment
                         ["failure_guid"] = m.GetFailureDefinitionId().Guid.ToString(),
                         ["txn"] = txn,
                         ["txn_being_committed"] = committing,
-                        // Logged before Revit's default handling; the outcome shows up as a later
-                        // doc_changed (committed) or its absence / csharp commit_status (rolled back).
-                        ["resolution"] = "revit_default",
+                        // Logged before Revit finishes handling; the outcome shows up as a later
+                        // doc_changed (committed / rolled back) and the csharp commit_status.
+                        ["resolution"] = handling,
                     });
                 }
             }
@@ -137,15 +153,18 @@ namespace revit_mcp_plugin.Experiment
                 else if (e is MessageBoxShowingEventArgs mb) message = mb.Message;
 
                 // Decision 2026-11-10 (Cole, pilot evidence): during a run, Revit's modal warning/error
-                // dialog blocks the main thread forever. Press the button a person would: OK for warnings
-                // (change kept, warnings stay in the model), Cancel when an error was reported (Revit rolls
-                // the change back). Outside a run, dialogs behave normally. Other dialogs are only logged.
+                // dialog blocks the main thread forever. Warnings-only transactions are made non-modal in
+                // OnFailuresProcessing, so this dialog should now appear only for errors: press Cancel
+                // (Revit rolls the change back). Tested: OverrideResult(1) on this dialog ALSO rolls back,
+                // so it is not "OK"; it remains only as a last resort so a run is not hung forever.
+                // Outside a run, dialogs behave normally. Other dialogs are only logged.
                 string action = "none (not auto-dismissed)";
                 if (RunLog.RunDir != null && e.DialogId == "Dialog_Revit_DocWarnDialog")
                 {
                     bool hadError = RunLog.PendingFailureHasError;
-                    e.OverrideResult(hadError ? 2 /*IDCANCEL*/ : 1 /*IDOK*/);
-                    action = hadError ? "auto_cancel (error reported)" : "auto_ok (warnings only)";
+                    e.OverrideResult(hadError ? 2 : 1);
+                    action = hadError ? "auto_cancel (error reported; Revit rolls back)"
+                                      : "auto_override_1 (warnings only; observed to roll back)";
                 }
                 RunLog.PendingFailureHasError = false;
 
