@@ -21,6 +21,7 @@ namespace revit_mcp_plugin.Experiment
         public static int ChangesInCmd;    // doc_changed events (with element changes) during the current command
         public static volatile bool InSnapshot;
         public static volatile bool SkipPng;
+        public static volatile bool PendingFailureHasError;  // an error-severity failure was seen since the last dialog
 
         // Filled by ExperimentTraceListener from [RevitMCP][...] trace lines during a command
         public static volatile string LastCsharpException;

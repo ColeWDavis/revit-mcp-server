@@ -108,6 +108,8 @@ namespace revit_mcp_plugin.Experiment
                 try { committing = fa.IsTransactionBeingCommitted(); } catch { }
                 foreach (var m in msgs)
                 {
+                    var sev = m.GetSeverity();
+                    if (sev != FailureSeverity.Warning) RunLog.PendingFailureHasError = true;
                     RunLog.Write("failure", new JObject
                     {
                         ["cmd_seq"] = RunLog.CmdSeq,
@@ -133,13 +135,27 @@ namespace revit_mcp_plugin.Experiment
                 string message = null;
                 if (e is TaskDialogShowingEventArgs td) message = td.Message;
                 else if (e is MessageBoxShowingEventArgs mb) message = mb.Message;
+
+                // Decision 2026-11-10 (Cole, pilot evidence): during a run, Revit's modal warning/error
+                // dialog blocks the main thread forever. Press the button a person would: OK for warnings
+                // (change kept, warnings stay in the model), Cancel when an error was reported (Revit rolls
+                // the change back). Outside a run, dialogs behave normally. Other dialogs are only logged.
+                string action = "none (not auto-dismissed)";
+                if (RunLog.RunDir != null && e.DialogId == "Dialog_Revit_DocWarnDialog")
+                {
+                    bool hadError = RunLog.PendingFailureHasError;
+                    e.OverrideResult(hadError ? 2 /*IDCANCEL*/ : 1 /*IDOK*/);
+                    action = hadError ? "auto_cancel (error reported)" : "auto_ok (warnings only)";
+                }
+                RunLog.PendingFailureHasError = false;
+
                 RunLog.Write("dialog", new JObject
                 {
                     ["cmd_seq"] = RunLog.CmdSeq,
                     ["dialog_id"] = e.DialogId,
                     ["dialog_type"] = e.GetType().Name,
                     ["message"] = message,
-                    ["action"] = "none (not auto-dismissed)",
+                    ["action"] = action,
                 });
             }
             catch { }
@@ -294,7 +310,7 @@ namespace revit_mcp_plugin.Experiment
                     {
                         var view = new FilteredElementCollector(doc).OfClass(typeof(View3D)).Cast<View3D>()
                             .Where(v => !v.IsTemplate)
-                            .OrderBy(v => v.Name == "{3D}" ? 0 : 1).FirstOrDefault();
+                            .OrderBy(v => v.Name == "3D Snapshot" ? 0 : v.Name == "{3D}" ? 1 : 2).FirstOrDefault();
                         if (view == null) res["png_error"] = "no 3D view in document";
                         else
                         {
