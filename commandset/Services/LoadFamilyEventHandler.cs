@@ -41,7 +41,7 @@ namespace RevitMCPCommandSet.Services
                 switch (Action.ToLower())
                 {
                     case "load":
-                        ExecuteLoad(doc);
+                        ExecuteLoad(doc, app.Application.VersionNumber);
                         break;
                     case "list":
                         ExecuteList(doc);
@@ -67,10 +67,28 @@ namespace RevitMCPCommandSet.Services
             }
         }
 
-        private void ExecuteLoad(Document doc)
+        // Experiment patch P7: only load .rfa files from Revit's own family library.
+        private static string LibraryRoot(string versionNumber) =>
+            System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Autodesk", $"RVT {versionNumber}", "Libraries");
+
+        private void ExecuteLoad(Document doc, string versionNumber)
         {
             if (string.IsNullOrEmpty(FamilyPath))
                 throw new ArgumentException("familyPath is required for 'load' action");
+
+            string root = System.IO.Path.GetFullPath(LibraryRoot(versionNumber))
+                .TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
+            string full = System.IO.Path.GetFullPath(FamilyPath);
+            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(System.IO.Path.GetExtension(full), ".rfa", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Diagnostics.Trace.WriteLine($"[RevitMCP][load_family_refused] {FamilyPath}");
+                throw new UnauthorizedAccessException(
+                    $"load_family only loads .rfa files from the Revit family library ({root}).");
+            }
+            FamilyPath = full;
 
             if (!System.IO.File.Exists(FamilyPath))
                 throw new System.IO.FileNotFoundException($"Family file not found: {FamilyPath}");
